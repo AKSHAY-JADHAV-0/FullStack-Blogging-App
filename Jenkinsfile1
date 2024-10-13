@@ -6,8 +6,40 @@ pipeline {
         jdk 'jdk17'
     }
 
+    environment{
+        DOCKER_IMAGE = ""
+        NEXUS_URL = 'http://3.108.196.26:8081'
+        NEXUS_REPOSITORY = 'maven-releases'
+        NEXUS_CREDENTIALS_ID = 'nexus-cred'
+        SONAR_URL = 'http://3.110.147.61:9000'
+        SONAR_CREDENTIALS_ID = 'sonar-cred'
+        EKS_CLUSTER_NAME = 'fullstack-webapp'
+        AWS_REGION = 'ap-south-1'
+        KUBE_CONFIG_PATH = '/path/to/kubeconfig'
+        SONAR_TOKEN = credentials('sonar-token') 
+    }
+
     stages {
         
+        stage('git_checkout') {
+            steps {
+                checkout([$class: 'GitSCM', 
+                    branches: [[name: '*/main']], 
+                    extensions: [], 
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/AKSHAY-JADHAV-0/FullStack-Blogging-App.git', 
+                        credentialsId: 'git-cred'
+                    ]]
+                ])
+            }
+        }
+
+        stage('clean package') {
+            steps {
+            sh  "mvn clean" //cleanup previous build
+            }
+        }
+
         stage('Compile') {
             steps {
             sh  "mvn compile"
@@ -19,7 +51,48 @@ pipeline {
                 sh "mvn test"
             }
         }
-        
+
+        stage('Verify integration') {
+            steps {
+                sh "mvn verify"
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                        def mvn = tool 'maven3'
+                        
+                        withSonarQubeEnv('SonarQube') {  // 'SonarQube' is the SonarQube server ID in Jenkins
+                            sh "${mvn}/bin/mvn clean verify sonar:sonar \
+                                -Dsonar.projectKey=fullstack_webapp \
+                                -Dsonar.login=${SONAR_TOKEN}"
+                        }
+                    }
+                }
+            }
+        }
+
+
+        stage('Build') {
+            steps {
+                sh "mvn package"
+            }
+        }
+
+        stage('publish to nexus') {
+            steps {
+                sh "mvn package"
+            }
+        }
+
+        stage('Package') {
+            steps {
+                sh "mvn package"
+            }
+        }
+
         stage('Package') {
             steps {
                 sh "mvn package"
