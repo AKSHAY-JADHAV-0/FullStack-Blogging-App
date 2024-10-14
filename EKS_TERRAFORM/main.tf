@@ -1,26 +1,45 @@
-# main.tf
-# Creating EC2 instance for launching EKS
 
-resource "aws_eks_cluster" "fullstack-webapplication-cluster" {
-  name     = "fullstack-webapplication-cluster"
-  role_arn = aws_iam_role.fullstack-webapplication-role.arn
+# Create a Security Group for Pods
+resource "aws_security_group" "fullstack_webapp_pod_sg" {
+  vpc_id      = aws_vpc.fullstack_webapplication.id
+  name        = "fullstack-webapp-pod-sg"
+  description = "Security group for fullstack webapp pods"
+
+  tags = {
+    Name = "fullstack-webapp-pod-sg"
+  }
+}
+
+# Associate Security Group with EKS Cluster
+resource "aws_eks_cluster" "fullstack_webapp_cluster" {
+  name     = "fullstack-webapp-cluster"
+  role_arn = aws_iam_role.fullstack_webapp_pod_role.arn
 
   vpc_config {
-    subnet_ids = [aws_subnet.fullstack-webapplication-private-subnet.id, aws_subnet.fullstack-webapplication-public-subnet.id]
+    subnet_ids = [
+      aws_subnet.fullstack_webapplication_private_subnet.id,
+      aws_subnet.fullstack_webapplication_public_subnet.id,
+    ]
+
+    security_group_ids = [
+      aws_security_group.fullstack_webapp_pod_sg.id,
+    ]
   }
 
-  # Ensure that IAM Role permissions are created before and deleted after EKS Cluster handling.
-  # Otherwise, EKS will not be able to properly delete EKS managed EC2 infrastructure such as Security Groups.
   depends_on = [
-    aws_iam_role_policy_attachment.fullstack-webapplication-AmazonEKSClusterPolicy,
-    aws_iam_role_policy_attachment.fullstack-webapplication-AmazonEKSVPCResourceController,
+    aws_iam_role_policy_attachment.fullstack_eks_cluster_policy,
+    aws_iam_role_policy_attachment.fullstack_eks_vpc_resource_controller_policy,
+    aws_iam_role_policy_attachment.pod_role_policy,
   ]
 }
 
+# Output EKS Cluster Endpoint
 output "endpoint" {
-  value = aws_eks_cluster.fullstack-webapplication-cluster.endpoint
+  description = "taking value when created"
+  value = aws_eks_cluster.fullstack_webapp_cluster.endpoint
 }
 
-output "kubeconfig-certificate-authority-data" {
-  value = aws_eks_cluster.fullstack-webapplication-cluster.certificate_authority[0].data
+# Output Kubernetes Certificate Authority Data
+output "kubeconfig_certificate_authority_data" {
+  value = aws_eks_cluster.fullstack_webapp_cluster.certificate_authority[0].data
 }
